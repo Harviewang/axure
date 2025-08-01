@@ -1,7 +1,7 @@
 javascript:(function () {
   const MyIRR = {};
 
-  // IRR计算主函数
+  // IRR 核心算法
   MyIRR.irr = function (cashflows, guessList = [0.1, 0.2, 0.4, 0.6, 0.8]) {
     const tol = 1e-7, maxIter = 1000;
     function npv(rate) {
@@ -27,13 +27,18 @@ javascript:(function () {
     return null;
   };
 
+  // 默认计算执行函数
   MyIRR.runDefault = function () {
     const cashflows = [];
     const outBox = $axure('@irrOut');
     const yearBox = $axure('@maxYears');
     const profit0Box = $axure('@profit0');
+    const moneyInBox = $axure('@moneyIn');
+    const moneyOutBox = $axure('@moneyOut');
 
-    // 组件是否都存在，且含有 text 方法
+    let totalIn = 0;
+    let totalOut = 0;
+
     if (!outBox || !yearBox || !profit0Box || typeof yearBox.text !== 'function' || typeof profit0Box.text !== 'function') {
       console.error('组件缺失或text方法错误，请检查命名：@irrOut、@maxYears、@profit0');
       return;
@@ -62,8 +67,9 @@ javascript:(function () {
       outBox.text('❌ 建设期现金流不是有效数字');
       return;
     }
-
     cashflows.push(profit0);
+    if (profit0 > 0) totalIn += profit0;
+    else if (profit0 < 0) totalOut += profit0;
 
     for (let i = 1; i <= maxYears; i++) {
       const box = $axure(`@profit${i}`);
@@ -82,12 +88,24 @@ javascript:(function () {
         continue;
       }
       cashflows.push(val);
+      if (val > 0) totalIn += val;
+      else if (val < 0) totalOut += val;
     }
 
+    // 计算并输出 IRR
     const irr = MyIRR.irr(cashflows);
     const result = irr != null ? (irr * 100).toFixed(2) + '%' : '❌ IRR 计算失败：现金流无效或始终为负';
     outBox.text(result);
+
+    // 输出 moneyIn / moneyOut
+    if (moneyInBox && typeof moneyInBox.text === 'function') {
+      moneyInBox.text(totalIn.toFixed(2));
+    }
+    if (moneyOutBox && typeof moneyOutBox.text === 'function') {
+      moneyOutBox.text(Math.abs(totalOut).toFixed(2));
+    }
   };
 
+  // 全局挂载
   window.myAxHelper = MyIRR;
 })();
