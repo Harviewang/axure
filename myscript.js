@@ -2,7 +2,7 @@
 (function () {
   const MyIRR = {};
 
-  // 核心计算函数：近似 Excel IRR，支持多 guess，避免除0
+  // 核心计算函数：近似 Excel IRR，支持多个 guess
   MyIRR.irr = function (cashflows, guessList = [0.1, 0.2, 0.4, 0.6, 0.8]) {
     const tol = 1e-7;
     const maxIter = 1000;
@@ -14,7 +14,7 @@
     function derivative(rate) {
       return cashflows.reduce((acc, val, i) => {
         if (i === 0) return acc;
-        return acc - i * val * i / Math.pow(1 + rate, i + 1);
+        return acc - i * val / Math.pow(1 + rate, i + 1);
       }, 0);
     }
 
@@ -33,7 +33,7 @@
     return null;
   };
 
-  // 计算并输出到指定组件
+  // 主计算函数
   MyIRR.run = function (inputIds, outputId) {
     try {
       const cashflows = inputIds.map(id => {
@@ -55,13 +55,23 @@
     }
   };
 
-  // 预设默认组件名（适用于 cf0~cf10 + irrOut）
+  // 默认配置：cf0～cf10 作为输入，irrOut 作为输出
   MyIRR.runDefault = function () {
     const inputs = [];
     for (let i = 0; i <= 10; i++) inputs.push(`@cf${i}`);
     MyIRR.run(inputs, '@irrOut');
   };
 
-  // 暴露给全局调用
+  // 绑定按钮（推荐按钮命名为：calcBtn）
+  $axure(function () {
+    const btn = $axure('@calcBtn');
+    if (btn && btn.click) {
+      btn.click(() => {
+        MyIRR.runDefault();
+      });
+    }
+  });
+
+  // 暴露
   window.myAxHelper = MyIRR;
 })();
