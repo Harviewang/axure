@@ -1,10 +1,6 @@
-// == coding: utf-8 ==
-// myscript.js
-
 (function () {
   const MyIRR = {};
 
-  // IRR 计算逻辑，使用 Newton-Raphson 方法模拟 Excel 的 IRR
   MyIRR.irr = function (cashflows, guessList = [0.1, 0.2, 0.4, 0.6, 0.8]) {
     const tol = 1e-7, maxIter = 1000;
 
@@ -15,7 +11,7 @@
     function derivative(rate) {
       return cashflows.reduce((acc, val, i) => {
         if (i === 0) return acc;
-        return acc - i * val / Math.pow(1 + rate, i + 0);
+        return acc - i * val / Math.pow(1 + rate, i + 1);
       }, 0);
     }
 
@@ -34,37 +30,51 @@
     return null;
   };
 
-  // 绑定 Axure 执行逻辑
   MyIRR.runDefault = function () {
-    $axure.internal((sax) => {
-      const cashflows = [];
+    const cashflows = [];
 
-      // 获取最大年限
-      const yearStr = $axure('@maxYear').text().trim();
-      const maxYear = parseInt(yearStr, 10);
+    const outBox = $axure('@irrOut');
+    const yearBox = $axure('@maxYears');
+    const profit0Box = $axure('@profit0');
 
-      if (isNaN(maxYear) || maxYear < 0 || maxYear > 50) {
-        $axure('@irrOut').text('❌ 请输入有效的计算年限（0~50）');
+    if (!outBox || !yearBox || !profit0Box) {
+      console.error('缺少关键元件：@irrOut @maxYear @profit0');
+      return;
+    }
+
+    // 获取 maxYear
+    const maxYears = parseInt(yearBox.text().trim(), 10);
+    if (isNaN(maxYears) || maxYears < 0 || maxYears > 50) {
+      outBox.text('❌ 请输入有效的运营年限（0~50）');
+      return;
+    }
+
+    // 获取建设期 profit0
+    const profit0 = parseFloat(profit0Box.text().trim().replace(/,/g, ''));
+    if (isNaN(profit0)) {
+      outBox.text('❌ 建设期现金流（profit0）不是有效数字');
+      return;
+    }
+    cashflows.push(profit0);
+
+    // 获取运营期 profit1 ~ profitN
+    for (let i = 1; i <= maxYears; i++) {
+      const box = $axure(`@profit${i}`);
+      if (!box || !box.text) break;
+      const val = parseFloat(box.text().trim().replace(/,/g, ''));
+      if (isNaN(val)) {
+        outBox.text(`❌ 第 ${i} 年现金流（profit${i}）不合法`);
         return;
       }
+      cashflows.push(val);
+    }
 
-      // 遍历 profit0 ~ profitN
-      for (let i = 0; i <= maxYear; i++) {
-        const val = $axure('@profit' + i).text().trim().replace(/,/g, '');
-        const num = parseFloat(val);
-        if (isNaN(num)) {
-          $axure('@irrOut').text('⚠️ 第 ' + i + ' 年输入非法：' + val);
-          return;
-        }
-        cashflows.push(num);
-      }
-
-      const irr = MyIRR.irr(cashflows);
-      const result = irr != null ? (irr * 100).toFixed(2) + '%' : 'IRR速率迭代失败';
-      $axure('@irrOut').text(result);
-    });
+    // 计算 IRR
+    const irr = MyIRR.irr(cashflows);
+    const result = irr != null ? (irr * 100).toFixed(2) + '%' : '❌ IRR 计算失败';
+    outBox.text(result);
   };
 
-  // 挂载全局对象（供按钮点击调用）
+  // 注册全局入口
   window.myAxHelper = MyIRR;
 })();
