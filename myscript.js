@@ -1,5 +1,7 @@
-// IRR 计算函数：输入数组如 [-10000, 2000, 2500, ..., 6000]
-irr: function (cashflows, guess = 0.1) {
+// myscript.js
+window.myAxHelper = window.myAxHelper || {};
+
+window.myAxHelper.irr = function (cashflows, guess = 0.1) {
   const maxIter = 1000;
   const tol = 1e-6;
 
@@ -18,4 +20,3 @@ irr: function (cashflows, guess = 0.1) {
   }
   return null; // 未收敛
 }
-
