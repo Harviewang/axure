@@ -1,11 +1,8 @@
-// myscript.js
 (function () {
   const MyIRR = {};
 
-  // 核心计算函数：近似 Excel IRR，支持多个 guess
   MyIRR.irr = function (cashflows, guessList = [0.1, 0.2, 0.4, 0.6, 0.8]) {
-    const tol = 1e-7;
-    const maxIter = 1000;
+    const tol = 1e-7, maxIter = 1000;
 
     function npv(rate) {
       return cashflows.reduce((acc, val, i) => acc + val / Math.pow(1 + rate, i), 0);
@@ -21,10 +18,10 @@
     for (let guess of guessList) {
       let rate = guess;
       for (let i = 0; i < maxIter; i++) {
-        const f = npv(rate);
-        const f1 = derivative(rate);
-        if (Math.abs(f1) < 1e-10) break;
+        const f = npv(rate), f1 = derivative(rate);
+        if (!isFinite(f1) || Math.abs(f1) < 1e-10) break;
         const newRate = rate - f / f1;
+        if (!isFinite(newRate)) break;
         if (Math.abs(newRate - rate) < tol) return newRate;
         rate = newRate;
       }
@@ -33,45 +30,56 @@
     return null;
   };
 
-  // 主计算函数
-  MyIRR.run = function (inputIds, outputId) {
-    try {
-      const cashflows = inputIds.map(id => {
-        const raw = $axure(id).text().trim();
-        const num = parseFloat(raw.replace(/,/g, ''));
-        if (isNaN(num)) throw new Error(`输入无效：${id}`);
-        return num;
-      });
-
-      const result = MyIRR.irr(cashflows);
-
-      if (result == null || isNaN(result)) {
-        $axure(outputId).text('IRR计算失败（无解）');
-      } else {
-        $axure(outputId).text((result * 100).toFixed(2) + '%');
-      }
-    } catch (err) {
-      $axure(outputId).text(err.message || 'IRR异常');
-    }
-  };
-
-  // 默认配置：cf0～cf10 作为输入，irrOut 作为输出
   MyIRR.runDefault = function () {
-    const inputs = [];
-    for (let i = 0; i <= 10; i++) inputs.push(`@cf${i}`);
-    MyIRR.run(inputs, '@irrOut');
+    $axure.internal($ax => {
+      const cashflows = [];
+
+      // 获取最大年限输入
+      let maxYears = 25;
+      try {
+        const val = $axure('@maxYears')?.text?.().trim();
+        const parsed = parseInt(val);
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 50) {
+          maxYears = parsed;
+        }
+      } catch (e) {
+        // fallback: 保持 maxYears = 25
+      }
+
+      for (let i = 1; i <= maxYears; i++) {
+        const id = '@profit' + i;
+        const widget = $axure(id);
+        if (!widget || typeof widget.text !== 'function') continue;
+
+        const raw = widget.text();
+        if (typeof raw !== 'string') continue;
+
+        const val = raw.trim().replace(/,/g, '');
+        if (val === '') continue;
+
+        const num = parseFloat(val);
+        if (isNaN(num)) {
+          $axure('@irrOut').text(`无效输入 @profit${i}：${val}`);
+          $axure('@irrYears').text('');
+          return;
+        }
+
+        cashflows.push(num);
+      }
+
+      if (cashflows.length === 0) {
+        $axure('@irrOut').text('无有效现金流输入');
+        $axure('@irrYears').text('');
+        return;
+      }
+
+      const irr = MyIRR.irr(cashflows);
+      const result = irr != null ? (irr * 100).toFixed(2) + '%' : 'IRR计算失败';
+
+      $axure('@irrOut').text(result);
+      $axure('@irrYears').text(`共计算 ${cashflows.length} 年现金流`);
+    });
   };
 
-  // 绑定按钮（推荐按钮命名为：calcBtn）
-  $axure(function () {
-    const btn = $axure('@calcBtn');
-    if (btn && btn.click) {
-      btn.click(() => {
-        MyIRR.runDefault();
-      });
-    }
-  });
-
-  // 暴露
   window.myAxHelper = MyIRR;
 })();
