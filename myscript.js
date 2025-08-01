@@ -1,6 +1,12 @@
 (function () {
+  // 定义全局对象 MyIRR，挂载计算方法
   const MyIRR = {};
 
+  /**
+   * IRR 计算函数
+   * @param {number[]} cashflows - 从第0年开始的现金流数组
+   * @param {number[]} guessList - 初始猜测列表
+   */
   MyIRR.irr = function (cashflows, guessList = [0.1, 0.2, 0.4, 0.6, 0.8]) {
     const tol = 1e-7, maxIter = 1000;
 
@@ -30,34 +36,36 @@
     return null;
   };
 
+  /**
+   * runDefault：Axure按钮点击后执行
+   */
   MyIRR.runDefault = function () {
-    const cashflows = [];
-
     const outBox = $axure('@irrOut');
-    const yearBox = $axure('@maxYears');
+    const yearBox = $axure('@maxYears'); 
     const profit0Box = $axure('@profit0');
 
     if (!outBox || !yearBox || !profit0Box) {
-      console.error('缺少关键元件：@irrOut @maxYear @profit0');
+      console.error('缺少关键组件：@irrOut、@maxYears、@profit0');
       return;
     }
 
-    // 获取 maxYear
+    // 获取运营年限
     const maxYears = parseInt(yearBox.text().trim(), 10);
     if (isNaN(maxYears) || maxYears < 0 || maxYears > 50) {
       outBox.text('❌ 请输入有效的运营年限（0~50）');
       return;
     }
 
-    // 获取建设期 profit0
+    // 获取建设期现金流
     const profit0 = parseFloat(profit0Box.text().trim().replace(/,/g, ''));
     if (isNaN(profit0)) {
       outBox.text('❌ 建设期现金流（profit0）不是有效数字');
       return;
     }
-    cashflows.push(profit0);
 
-    // 获取运营期 profit1 ~ profitN
+    const cashflows = [profit0];
+
+    // 获取每年运营期现金流 profit1 ~ profitN
     for (let i = 1; i <= maxYears; i++) {
       const box = $axure(`@profit${i}`);
       if (!box || !box.text) break;
@@ -69,10 +77,18 @@
       cashflows.push(val);
     }
 
-    // 计算 IRR
+    // 调用 IRR 函数进行计算
     const irr = MyIRR.irr(cashflows);
-    const result = irr != null ? (irr * 100).toFixed(2) + '%' : '❌ IRR 计算失败';
-    outBox.text(result);
+
+    if (irr == null) {
+      if (cashflows.every(v => v <= 0)) {
+        outBox.text('❌ 所有现金流均为负或零，无法定义IRR');
+      } else {
+        outBox.text('❌ IRR 计算失败，可能无解');
+      }
+    } else {
+      outBox.text((irr * 100).toFixed(2) + '%');
+    }
   };
 
   // 注册全局入口
