@@ -109,38 +109,50 @@ javascript:(function () {
   // 全局挂载
   window.myAxHelper = MyIRR;
 
-  // 税金同步函数：从 incomeRepeater 和 costRepeater 更新 taxRepeater 的 vatOut 与 vatIn
-  MyIRR.syncTaxToRepeater = function () {
-    const incomeRepeater = $axure('@incomeRepeater');
-    const costRepeater = $axure('@costRepeater');
-    const taxRepeater = $axure('@taxRepeater');
 
-    if (!incomeRepeater || !costRepeater || !taxRepeater) {
-      console.error('找不到 Repeater，请检查命名');
-      return;
+// === 税金同步功能：从 incomeRepeater 和 costRepeater 写入 taxRepeater ===
+myAxHelper.safeGetValueFromRepeater = function (repeaterName, yearText, fieldLabel) {
+  const $rows = $('[data-label="' + repeaterName + '"]').find('tr');
+  for (let i = 0; i < $rows.length; i++) {
+    const $row = $rows.eq(i);
+    const $year = $row.find('[data-label="yearsName"]');
+    if ($year.length && $year.text().trim() === yearText) {
+      const $valWidget = $row.find('[data-label="' + fieldLabel + '"]');
+      if ($valWidget.length) {
+        const text = $valWidget.text().trim().replace(/,/g, '');
+        const val = parseFloat(text);
+        return isNaN(val) ? 0 : val;
+      }
     }
+  }
+  return 0;
+};
 
-    const incomeData = incomeRepeater.getRepeaterData();
-    const costData = costRepeater.getRepeaterData();
-    const taxData = taxRepeater.getRepeaterData();
+myAxHelper.syncTaxToRepeater = function () {
+  const taxRepeater = $axure('@taxRepeater');
+  if (!taxRepeater || typeof taxRepeater.editRepeaterData !== 'function') {
+    console.error('找不到 taxRepeater 或其不支持 editRepeaterData');
+    return;
+  }
 
-    const newTaxData = taxData.map((row, i) => {
-      const incomeTax = parseFloat((incomeData[i]?.tax || '0').replace(/,/g, '')) || 0;
-      const opexTax = parseFloat((costData[i]?.opex_tax || '0').replace(/,/g, '')) || 0;
-      const insuranceTax = parseFloat((costData[i]?.insurance_tax || '0').replace(/,/g, '')) || 0;
-      const landTax = parseFloat((costData[i]?.land_tax || '0').replace(/,/g, '')) || 0;
-      const otherTax = parseFloat((costData[i]?.other_tax || '0').replace(/,/g, '')) || 0;
+  const rows = $('[data-label="taxRepeater"]').find('tr');
+  rows.each(function (i, rowEl) {
+    const $row = $(rowEl);
+    const yearText = $row.find('[data-label="yearsName"]').text().trim();
+    if (!yearText) return;
 
-      const vatIn = opexTax + insuranceTax + landTax + otherTax;
+    const vatOut = myAxHelper.safeGetValueFromRepeater('incomeRepeater', yearText, 't_销项税');
+    const opexTax = myAxHelper.safeGetValueFromRepeater('costRepeater', yearText, 't4_运维税额');
+    const insuranceTax = myAxHelper.safeGetValueFromRepeater('costRepeater', yearText, 't4_保险税额');
+    const landTax = myAxHelper.safeGetValueFromRepeater('costRepeater', yearText, 't4_土地税额');
+    const otherTax = myAxHelper.safeGetValueFromRepeater('costRepeater', yearText, 't4_其他税额');
+    const vatIn = opexTax + insuranceTax + landTax + otherTax;
 
-      return {
-        ...row,
-        vatOut: incomeTax.toFixed(2),
-        vatIn: vatIn.toFixed(2),
-      };
+    taxRepeater.editRepeaterData(i, {
+      vatOut: vatOut.toFixed(2),
+      vatIn: vatIn.toFixed(2)
     });
-
-    taxRepeater.updateRepeaterData(newTaxData);
-  };
+  });
+};
 
 })();
